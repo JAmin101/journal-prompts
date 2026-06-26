@@ -3,7 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Journal Prompt Picker</title>
+<title>Journal Prompts</title>
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Journal" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#f5f0e8" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%23f5f0e8'/%3E%3Ctext x='90' y='120' font-size='90' text-anchor='middle' fill='%23c8973a'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E" />
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -105,6 +111,75 @@
   .empty-icon { font-size: 44px; margin-bottom: 14px; opacity: 0.45; }
   .empty p { font-style: italic; font-size: 0.95rem; line-height: 1.6; }
 
+  /* Repeat toggle */
+  .repeat-row { display: flex; align-items: center; gap: 12px; }
+  .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0; background: var(--border);
+    border-radius: 24px; cursor: pointer; transition: background 0.2s;
+  }
+  .slider::before {
+    content: ''; position: absolute; width: 18px; height: 18px;
+    left: 3px; top: 3px; background: white; border-radius: 50%;
+    transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  input:checked + .slider { background: var(--gold); }
+  input:checked + .slider::before { transform: translateX(20px); }
+  .repeat-label { font-family: 'Lora', serif; font-size: 0.88rem; color: var(--ink-light); cursor: pointer; user-select: none; }
+  .repeat-sub { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--ink-faint); margin-top: 2px; letter-spacing: 0.04em; }
+
+  /* View all */
+  .view-all-btn {
+    display: block; width: 100%; margin-top: 12px; padding: 11px;
+    background: transparent; border: 1px solid var(--border); border-radius: 3px;
+    font-family: 'DM Mono', monospace; font-size: 0.76rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-faint); cursor: pointer; transition: all 0.2s;
+  }
+  .view-all-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  .all-prompts-panel { display: none; margin-top: 8px; }
+  .all-prompts-panel.open { display: block; }
+
+  .all-prompts-search {
+    width: 100%; padding: 9px 14px; border: 1px solid var(--border); border-radius: 3px;
+    background: white; font-family: 'Lora', serif; font-size: 0.85rem; color: var(--ink);
+    outline: none; margin-bottom: 14px; transition: border-color 0.2s;
+  }
+  .all-prompts-search:focus { border-color: var(--gold); }
+  .all-prompts-search::placeholder { color: var(--ink-faint); }
+
+  .all-prompts-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+
+  .all-prompt-row {
+    display: flex; align-items: baseline; gap: 12px;
+    padding: 10px 14px; border-radius: 3px; transition: background 0.15s;
+    border: 1px solid transparent;
+  }
+  .all-prompt-row:hover { background: rgba(200,151,58,0.06); border-color: var(--border); }
+
+  .all-prompt-cat {
+    font-family: 'DM Mono', monospace; font-size: 0.65rem; letter-spacing: 0.1em;
+    text-transform: uppercase; flex-shrink: 0; width: 90px; padding-top: 2px;
+  }
+  .all-prompt-text {
+    font-family: 'Lora', serif; font-size: 0.88rem; line-height: 1.6; color: var(--ink);
+    flex: 1;
+  }
+  .all-prompt-text em { font-style: italic; }
+  .all-prompt-text strong { font-weight: 600; }
+
+  .no-results-msg { text-align: center; padding: 24px; font-style: italic; font-size: 0.85rem; color: var(--ink-faint); }
+
+  .highlight { background: rgba(200,151,58,0.25); border-radius: 2px; padding: 0 1px; }
+
+  .seen-badge {
+    font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--ink-faint);
+    text-align: center; margin-bottom: 16px; letter-spacing: 0.06em; display: none;
+  }
+  .seen-badge.show { display: block; }
+  .seen-badge a { color: var(--gold); cursor: pointer; text-decoration: underline; }
+
   .progress-log { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--ink-faint); margin-top: 8px; line-height: 1.7; display: none; }
   .progress-log.show { display: block; }
 </style>
@@ -166,9 +241,23 @@
         <span class="ctrl-label">How many prompts?</span>
         <div class="count-row" id="countRow"></div>
       </div>
+      <div>
+        <span class="ctrl-label">No repeats</span>
+        <div class="repeat-row">
+          <label class="switch">
+            <input type="checkbox" id="noRepeatToggle" onchange="onRepeatToggle()" />
+            <span class="slider"></span>
+          </label>
+          <div>
+            <div class="repeat-label" onclick="document.getElementById('noRepeatToggle').click()">Don't show a prompt twice</div>
+            <div class="repeat-sub" id="repeatSub">Off &mdash; prompts are fully random</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="bank-info" id="bankInfo"></div>
+    <div class="seen-badge" id="seenBadge"></div>
 
     <div class="pick-wrap">
       <button class="pick-btn" id="pickBtn" onclick="pickPrompts()">
@@ -177,6 +266,13 @@
     </div>
 
     <div class="prompt-cards" id="cards"></div>
+
+    <!-- View all prompts -->
+    <button class="view-all-btn" onclick="toggleViewAll()" id="viewAllBtn">&#9776; View all prompts</button>
+    <div class="all-prompts-panel" id="allPanel">
+      <input class="all-prompts-search" id="allSearch" placeholder="Search prompts&hellip;" oninput="renderAllPrompts()" />
+      <div class="all-prompts-list" id="allList"></div>
+    </div>
   </div>
 
   <div class="empty" id="emptyState">
@@ -191,6 +287,8 @@ var allPrompts  = [];
 var categories  = [];
 var selectedCat = 'All';
 var pickCount   = 1;
+var noRepeat    = false;
+var seenIndexes = []; // tracks which prompt indexes have been shown
 
 var CAT_COLORS = {
   career:        { accent:'#4a6882', tag:'rgba(74,104,130,0.12)',  text:'#4a6882' },
@@ -443,6 +541,7 @@ async function loadSheet(){
   allPrompts  = parsed;
   selectedCat = 'All';
   pickCount   = 1;
+  seenIndexes = [];
   categories  = ['All'].concat(
     parsed.map(function(p){return p.category;})
       .filter(function(v,i,a){return a.indexOf(v)===i&&v;})
@@ -471,7 +570,7 @@ function showErr(tips){
 }
 
 // ── Render UI ─────────────────────────────────────────────────────────────────
-function renderUI(){ renderPills(); renderCountBtns(); updateBank(); updatePickBtn(); document.getElementById('cards').innerHTML=''; }
+function renderUI(){ renderPills(); renderCountBtns(); updateBank(); updatePickBtn(); updateSeenBadge(); document.getElementById('cards').innerHTML=''; }
 
 function renderPills(){
   var c=document.getElementById('pills');
@@ -480,7 +579,7 @@ function renderPills(){
     var b=document.createElement('button');
     b.className='pill'+(cat===selectedCat?' active':'');
     b.textContent=cat;
-    b.onclick=function(){selectedCat=cat;renderPills();updateBank();updatePickBtn();document.getElementById('cards').innerHTML='';};
+    b.onclick=function(){selectedCat=cat;renderPills();updateBank();updatePickBtn();seenIndexes=[];updateSeenBadge();document.getElementById('cards').innerHTML='';if(viewAllOpen)renderAllPrompts();};
     c.appendChild(b);
   });
 }
@@ -492,7 +591,7 @@ function renderCountBtns(){
     var b=document.createElement('button');
     b.className='cnt-btn'+(n===pickCount?' active':'');
     b.textContent=n;
-    b.onclick=function(){pickCount=n;renderCountBtns();updatePickBtn();document.getElementById('cards').innerHTML='';};
+    b.onclick=function(){pickCount=n;renderCountBtns();updatePickBtn();seenIndexes=[];updateSeenBadge();document.getElementById('cards').innerHTML='';};
     c.appendChild(b);
   });
 }
@@ -515,24 +614,81 @@ function updatePickBtn(){
   document.getElementById('pickLabel').textContent=hasCards?'Pick Again \u21BB':(pickCount===1?'Pick a Prompt \u2726':'Pick '+pickCount+' Prompts \u2726');
 }
 
+function onRepeatToggle(){
+  noRepeat = document.getElementById('noRepeatToggle').checked;
+  seenIndexes = [];
+  document.getElementById('repeatSub').innerHTML = noRepeat
+    ? 'On &mdash; each prompt shown once until all used'
+    : 'Off &mdash; prompts are fully random';
+  updateSeenBadge();
+  document.getElementById('cards').innerHTML='';
+  updatePickBtn();
+}
+
+function updateSeenBadge(){
+  var badge = document.getElementById('seenBadge');
+  if(!noRepeat){ badge.classList.remove('show'); return; }
+  var p = pool();
+  // seenIndexes stores global allPrompts indexes; filter to current pool
+  var poolIndexes = p.map(function(item){ return allPrompts.indexOf(item); });
+  var seenInPool  = seenIndexes.filter(function(i){ return poolIndexes.indexOf(i) > -1; });
+  var remaining   = poolIndexes.length - seenInPool.length;
+  badge.classList.add('show');
+  if(remaining === 0){
+    badge.innerHTML = 'All prompts seen &mdash; <a onclick="resetSeen()">start over</a>';
+  } else {
+    badge.innerHTML = remaining + ' of ' + poolIndexes.length + ' prompts remaining &mdash; <a onclick="resetSeen()">reset</a>';
+  }
+}
+
+function resetSeen(){
+  seenIndexes = [];
+  updateSeenBadge();
+  document.getElementById('cards').innerHTML='';
+  updatePickBtn();
+}
+
 function pickPrompts(){
-  var p=pool();
+  var p = pool();
   if(!p.length) return;
-  var picked=[].concat(p).sort(function(){return Math.random()-0.5;}).slice(0,Math.min(pickCount,p.length));
-  var c=document.getElementById('cards');
-  c.innerHTML='';
+
+  var picked;
+  if(noRepeat){
+    // Build pool of unseen prompt indexes (relative to allPrompts)
+    var poolIndexes = p.map(function(item){ return allPrompts.indexOf(item); });
+    var unseen = poolIndexes.filter(function(i){ return seenIndexes.indexOf(i) === -1; });
+
+    // If not enough unseen left, top up from seen (partial reset)
+    if(unseen.length < pickCount){
+      // Reset seen for this pool, start fresh
+      seenIndexes = seenIndexes.filter(function(i){ return poolIndexes.indexOf(i) === -1; });
+      unseen = poolIndexes.slice();
+    }
+
+    // Shuffle unseen and pick
+    var shuffledIdx = unseen.slice().sort(function(){ return Math.random()-0.5; });
+    var chosenIdx   = shuffledIdx.slice(0, Math.min(pickCount, shuffledIdx.length));
+    chosenIdx.forEach(function(i){ seenIndexes.push(i); });
+    picked = chosenIdx.map(function(i){ return allPrompts[i]; });
+  } else {
+    picked = p.slice().sort(function(){ return Math.random()-0.5; }).slice(0, Math.min(pickCount, p.length));
+  }
+
+  var c = document.getElementById('cards');
+  c.innerHTML = '';
   picked.forEach(function(item,i){
-    var s=catStyle(item.category);
-    var div=document.createElement('div');
-    div.className='prompt-card';
-    div.innerHTML=
+    var s = catStyle(item.category);
+    var div = document.createElement('div');
+    div.className = 'prompt-card';
+    div.innerHTML =
       '<div class="card-accent" style="background:'+s.accent+'"></div>'+
       '<div class="card-num">Prompt '+(i+1)+' of '+picked.length+'</div>'+
       '<div class="card-text">\u201C'+renderMarkdown(item.prompt)+'\u201D</div>'+
       '<span class="card-tag" style="background:'+s.tag+';color:'+s.text+'">'+esc(item.category)+'</span>';
     c.appendChild(div);
   });
-  document.getElementById('pickLabel').textContent='Pick Again \u21BB';
+  document.getElementById('pickLabel').textContent = 'Pick Again \u21BB';
+  updateSeenBadge();
 }
 
 // ── Forget saved sheet ────────────────────────────────────────────────────────
@@ -557,6 +713,55 @@ window.addEventListener('DOMContentLoaded', function(){
     }
   } catch(e){}
 });
+
+// ── View all prompts ──────────────────────────────────────────────────────────
+var viewAllOpen = false;
+
+function toggleViewAll(){
+  viewAllOpen = !viewAllOpen;
+  var panel = document.getElementById('allPanel');
+  var btn   = document.getElementById('viewAllBtn');
+  panel.classList.toggle('open', viewAllOpen);
+  btn.textContent = viewAllOpen ? '\u2715 Close prompt list' : '\u2261 View all prompts';
+  if(viewAllOpen){
+    document.getElementById('allSearch').value = '';
+    renderAllPrompts();
+    setTimeout(function(){ panel.scrollIntoView({ behavior:'smooth', block:'start' }); }, 50);
+  }
+}
+
+function highlightText(text, query){
+  if(!query) return esc(text);
+  var escaped = esc(text);
+  var escapedQ = esc(query).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return escaped.replace(new RegExp('('+escapedQ+')', 'gi'), '<span class="highlight">$1</span>');
+}
+
+function renderAllPrompts(){
+  var query   = (document.getElementById('allSearch').value || '').toLowerCase().trim();
+  var source  = pool(); // respects current category filter
+  var list    = document.getElementById('allList');
+
+  var filtered = query
+    ? source.filter(function(p){ return p.prompt.toLowerCase().indexOf(query) > -1 || p.category.toLowerCase().indexOf(query) > -1; })
+    : source;
+
+  if(filtered.length === 0){
+    list.innerHTML = '<div class="no-results-msg">No prompts match your search.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  filtered.forEach(function(item){
+    var s   = catStyle(item.category);
+    var row = document.createElement('div');
+    row.className = 'all-prompt-row';
+    row.innerHTML =
+      '<span class="all-prompt-cat" style="color:'+s.text+'">'+highlightText(item.category, query)+'</span>'+
+      '<span class="all-prompt-text">'+highlightText(item.prompt, query)+'</span>';
+    list.appendChild(row);
+  });
+}
 </script>
 </body>
 </html>
